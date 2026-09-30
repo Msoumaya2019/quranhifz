@@ -8,7 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "typecheck": "tsc --noEmit",
-    "test": "node node_modules/typescript/bin/tsc src/core/quran.ts src/core/program.ts src/core/review.ts src/core/pageNavigation.ts src/core/audio.ts src/core/readerData.ts src/core/ayahMarker.ts src/core/daily.ts src/core/social.ts src/core/coranTestMode.ts src/core/qcfV4.ts src/core/qcfV4Html.ts --ignoreConfig --module commonjs --target es2022 --moduleResolution node --resolveJsonModule --esModuleInterop --outDir tests/build --ignoreDeprecations 6.0 --skipLibCheck && node --test tests/*.test.cjs"
+    "test": "node node_modules/typescript/bin/tsc src/core/quran.ts src/core/units.ts src/core/consolidation.ts src/core/program.ts src/core/review.ts src/core/pageNavigation.ts src/core/audio.ts src/core/readerData.ts src/core/ayahMarker.ts src/core/daily.ts src/core/social.ts src/core/coranTestMode.ts src/core/qcfV4.ts src/core/qcfV4Html.ts --ignoreConfig --module commonjs --target es2022 --moduleResolution node --resolveJsonModule --esModuleInterop --outDir tests/build --ignoreDeprecations 6.0 --skipLibCheck && node --test tests/*.test.cjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",

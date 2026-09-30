@@ -1,4 +1,4 @@
-import {AppState, addDays, memorizedIds, ReviewEvent, ReviewGrade, todayLocal, touch} from './program';
+import {AppState, addDays, completeSession, markKnowledge, memorizedIds, postponeSession, ReviewEvent, ReviewGrade, todayLocal, touch} from './program';
 import {juzs, quarters, Range, surahAt} from './quran';
 
 export type ReviewCategory='recent'|'habitual'|'priority';
@@ -8,7 +8,7 @@ export type ReviewPlan={recent:ReviewTask[];habitual:ReviewTask[];priority:Revie
 export const reviewsEnabled=(state:AppState)=>state.reviewSettings?.enabled!==false;
 export const reviewCycleDays=(state:AppState)=>state.reviewSettings?.cycleDays??7;
 const isKnown=(state:AppState,id:number)=>state.knowledge[id]==='perfect'||state.knowledge[id]==='review';
-const dayAge=(from:string,to:string)=>Math.round((Date.parse(`${to}T12:00:00Z`)-Date.parse(`${from}T12:00:00Z`))/86400000);
+export const dayAge=(from:string,to:string)=>Math.round((Date.parse(`${to}T12:00:00Z`)-Date.parse(`${from}T12:00:00Z`))/86400000);
 
 export function setReviewsEnabled(state:AppState,enabled:boolean,at=todayLocal()):AppState {
   if(reviewsEnabled(state)===enabled)return state;
@@ -126,4 +126,57 @@ export function gradeReviewTask(state:AppState,task:ReviewTask,grade:ReviewGrade
     if(grade==='perfect'&&markers[id]?.user){const current={...markers[id]};delete current.user;if(current.admin)markers[id]=current;else delete markers[id];difficultyHistory.push({verseId:id,date:at,origin:'user',action:'resolved'});}
   }
   return touch({...state,reviewDue:due,difficultyMarkers:markers,difficultyHistory,reviewHistory:[...(state.reviewHistory??[]),event]});
+}
+
+/* ------------------------------------------------------------------ *
+ * Les trois réponses de fin de passage
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ce que l'utilisateur déclare à la fin d'un passage.
+ *
+ * Trois réponses, et non deux : « je sais », « je l'ai travaillé mais je ne le
+ * tiens pas », « je ne l'ai pas encore appris ». Les deux dernières replanifient
+ * le passage de la même façon — il revient — mais elles ne disent pas la même
+ * chose de son état, et c'est cet écart qui pilote la suite.
+ */
+export type SessionOutcome = 'learned' | 'toReview' | 'notYet';
+
+export const sessionOutcomeLabels: Record<SessionOutcome, string> = {
+  learned: 'Appris',
+  toReview: 'À revoir',
+  notYet: 'Pas encore appris',
+};
+
+/**
+ * Enregistre la réponse de fin de passage.
+ *
+ * Chaque réponse correspond à **un** des états nommés dans `consolidation.ts`,
+ * et c'est là que se lit la différence entre les deux dernières :
+ *
+ * | Réponse | État obtenu | Ce que cela change |
+ * |---|---|---|
+ * | `learned` | `recentlyLearned` | le passage est mémorisé, la consolidation J+1 est programmée |
+ * | `toReview` | `struggling` | jamais compté comme appris, mais marqué difficile |
+ * | `notYet` | `inProgress` | rien n'est enregistré contre le passage, il revient tel quel |
+ *
+ * `toReview` marque **verset par verset**, et ne retire jamais un marquage
+ * existant : un passage déjà signalé comme difficile le reste. C'est ce
+ * marquage — et lui seul — qui sépare « à revoir » d'un simple report ; sans
+ * lui les deux réponses seraient indiscernables.
+ */
+export function finalizeSession(state: AppState, id: string, outcome: SessionOutcome, at = todayLocal()): AppState {
+  const session = state.sessions.find(s => s.id === id);
+  if (!session) return state;
+  if (outcome === 'learned') return completeSession(state, id, true, at);
+  if (outcome === 'notYet') return postponeSession(state, id, at);
+
+  // Le passage n'est jamais considéré comme acquis : il reste `learning`, ce qui
+  // le retire des passages mémorisés même s'il y figurait par ailleurs.
+  let next = markKnowledge(state, session, 'learning');
+  for (let verse = session.start; verse <= session.end; verse++) {
+    if (next.difficultyMarkers?.[verse]?.user) continue;
+    next = toggleDifficulty(next, verse, at);
+  }
+  return postponeSession(next, id, at);
 }
